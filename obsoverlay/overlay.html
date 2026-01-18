@@ -2,32 +2,34 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overlay</title>
 <style>
   body {
     margin: 0;
     background: transparent;
     overflow: hidden;
   }
-  #box {
+  #stage {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+  .item {
     position: absolute;
-    top: 50px;
-    left: 50px;
-    font-size: 32px;
-    color: white;
-    font-family: Arial, sans-serif;
   }
 </style>
 </head>
 <body>
 
-<div id="box"></div>
+<div id="stage"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCptjj7G9sq9z2IFl39bz2WcG7qLC4-LOw",
+  apiKey: "AIzaSyCptjj7G9sq9z2IFl39bz2G7qLC4-LOw",
   authDomain: "stream22-f8ec0.firebaseapp.com",
   databaseURL: "https://stream22-f8ec0-default-rtdb.firebaseio.com",
   projectId: "stream22-f8ec0"
@@ -36,14 +38,47 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// 👇 ТВОЙ СЕКРЕТНЫЙ ID (придумай свой, но похожий по форме)
 const SECRET_ID = "stream22_8f3kP9";
+const overlayRef = ref(db, `overlay/${SECRET_ID}/elements`);
 
-// 👇 Путь в базе с секретным ID
-const overlayRef = ref(db, `overlay/${SECRET_ID}/content`);
+const stage = document.getElementById("stage");
 
-onValue(overlayRef, snap => {
-  document.getElementById("box").innerHTML = snap.val() || "";
+function render(elements) {
+  stage.innerHTML = "";
+
+  for (const id in elements) {
+    const el = elements[id];
+
+    const node = document.createElement("div");
+    node.className = "item";
+    node.style.left = el.x + "px";
+    node.style.top = el.y + "px";
+    node.style.width = el.w + "px";
+    node.style.height = el.h + "px";
+
+    if (el.type === "iframe") {
+      node.innerHTML = `<iframe src="${el.value}" width="100%" height="100%" frameborder="0"></iframe>`;
+    }
+    if (el.type === "img") {
+      node.innerHTML = `<img src="${el.value}" width="100%" height="100%">`;
+    }
+    if (el.type === "video") {
+      node.innerHTML = `<iframe src="${el.value}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+    }
+    if (el.type === "audio") {
+      node.innerHTML = `<audio src="${el.value}" controls style="width:100%; height:100%;"></audio>`;
+    }
+    if (el.type === "text") {
+      node.innerHTML = `<div style="padding:5px; color:white;">${el.value}</div>`;
+    }
+
+    stage.appendChild(node);
+  }
+}
+
+onValue(overlayRef, (snapshot) => {
+  const elements = snapshot.val() || {};
+  render(elements);
 });
 </script>
 
