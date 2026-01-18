@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: Arial; padding: 20px; }
+  input { width: 300px; }
+</style>
+</head>
+<body>
+
+<h2>Управление оверлеем</h2>
+
+<button id="login">Войти через Google</button>
+<button id="logout" style="display:none;">Выйти</button>
+
+<br><br>
+
+<input id="html" placeholder="HTML / ссылка / текст">
+<button id="show" disabled>Показать</button>
+<button id="clear" disabled>Очистить</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCptjj7G9sq9z2IFl39bz2WcG7qLC4-LOw",
+  authDomain: "stream22-f8ec0.firebaseapp.com",
+  databaseURL: "https://stream22-f8ec0-default-rtdb.firebaseio.com",
+  projectId: "stream22-f8ec0"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+// 👇 Секретный ID (тот же, что в overlay.html)
+const SECRET_ID = "stream22_8f3kP9";
+const overlayRef = ref(db, `overlay/${SECRET_ID}/content`);
+
+const loginBtn = document.getElementById("login");
+const logoutBtn = document.getElementById("logout");
+const showBtn = document.getElementById("show");
+const clearBtn = document.getElementById("clear");
+
+loginBtn.onclick = () => {
+  const provider = new GoogleAuthProvider();
+  signInWithPopup(auth, provider);
+};
+
+logoutBtn.onclick = () => {
+  signOut(auth);
+};
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+    showBtn.disabled = false;
+    clearBtn.disabled = false;
+  } else {
+    loginBtn.style.display = "inline-block";
+    logoutBtn.style.display = "none";
+    showBtn.disabled = true;
+    clearBtn.disabled = true;
+  }
+});
+
+showBtn.onclick = () => {
+  set(overlayRef, document.getElementById("html").value);
+};
+
+clearBtn.onclick = () => {
+  set(overlayRef, "");
+};
+</script>
+
+</body>
+</html>
