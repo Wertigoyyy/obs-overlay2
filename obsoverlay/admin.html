@@ -2,9 +2,35 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin OBS Overlay</title>
 <style>
-  body { font-family: Arial; padding: 20px; }
-  input { width: 300px; }
+  body {
+    font-family: Arial;
+    padding: 20px;
+    background: #0b0f14;
+    color: #e6e8ea;
+  }
+  #stage {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #333;
+    background: #121820;
+    position: relative;
+    overflow: hidden;
+  }
+  .item {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.3);
+    cursor: move;
+  }
+  .controls {
+    margin-top: 10px;
+  }
+  input, select {
+    padding: 6px;
+    margin: 5px;
+  }
 </style>
 </head>
 <body>
@@ -14,19 +40,28 @@
 <button id="login">Войти через Google</button>
 <button id="logout" style="display:none;">Выйти</button>
 
-<br><br>
+<div class="controls">
+  <select id="type">
+    <option value="iframe">Iframe (чат/донаты)</option>
+    <option value="img">Картинка</option>
+    <option value="video">Видео (YouTube)</option>
+    <option value="audio">Аудио</option>
+    <option value="text">Текст</option>
+  </select>
 
-<input id="html" placeholder="HTML / ссылка / текст">
-<button id="show" disabled>Показать</button>
-<button id="clear" disabled>Очистить</button>
+  <input id="value" placeholder="URL / текст">
+  <button id="add" disabled>Добавить</button>
+</div>
+
+<div id="stage"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCptjj7G9sq9z2IFl39bz2WcG7qLC4-LOw",
+  apiKey: "AIzaSyCptjj7G9sq9z2IFl39bz2G7qLC4-LOw",
   authDomain: "stream22-f8ec0.firebaseapp.com",
   databaseURL: "https://stream22-f8ec0-default-rtdb.firebaseio.com",
   projectId: "stream22-f8ec0"
@@ -36,14 +71,15 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-// 👇 Секретный ID (тот же, что в overlay.html)
 const SECRET_ID = "stream22_8f3kP9";
-const overlayRef = ref(db, `overlay/${SECRET_ID}/content`);
+const overlayRef = ref(db, `overlay/${SECRET_ID}/elements`);
 
 const loginBtn = document.getElementById("login");
 const logoutBtn = document.getElementById("logout");
-const showBtn = document.getElementById("show");
-const clearBtn = document.getElementById("clear");
+const addBtn = document.getElementById("add");
+const stage = document.getElementById("stage");
+
+let elements = {};
 
 loginBtn.onclick = () => {
   const provider = new GoogleAuthProvider();
@@ -58,23 +94,96 @@ onAuthStateChanged(auth, user => {
   if (user) {
     loginBtn.style.display = "none";
     logoutBtn.style.display = "inline-block";
-    showBtn.disabled = false;
-    clearBtn.disabled = false;
+    addBtn.disabled = false;
   } else {
     loginBtn.style.display = "inline-block";
     logoutBtn.style.display = "none";
-    showBtn.disabled = true;
-    clearBtn.disabled = true;
+    addBtn.disabled = true;
   }
 });
 
-showBtn.onclick = () => {
-  set(overlayRef, document.getElementById("html").value);
+function saveToFirebase() {
+  set(overlayRef, elements);
+}
+
+function render() {
+  stage.innerHTML = "";
+  for (const id in elements) {
+    const el = elements[id];
+
+    const node = document.createElement("div");
+    node.className = "item";
+    node.style.left = el.x + "px";
+    node.style.top = el.y + "px";
+    node.style.width = el.w + "px";
+    node.style.height = el.h + "px";
+    node.dataset.id = id;
+
+    if (el.type === "iframe") {
+      node.innerHTML = `<iframe src="${el.value}" width="100%" height="100%" frameborder="0"></iframe>`;
+    }
+    if (el.type === "img") {
+      node.innerHTML = `<img src="${el.value}" width="100%" height="100%">`;
+    }
+    if (el.type === "video") {
+      node.innerHTML = `<iframe src="${el.value}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+    }
+    if (el.type === "audio") {
+      node.innerHTML = `<audio src="${el.value}" controls style="width:100%; height:100%;"></audio>`;
+    }
+    if (el.type === "text") {
+      node.innerHTML = `<div style="padding:5px;">${el.value}</div>`;
+    }
+
+    // drag
+    node.onmousedown = (e) => {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = el.x;
+      const startTop = el.y;
+
+      function move(ev) {
+        el.x = startLeft + (ev.clientX - startX);
+        el.y = startTop + (ev.clientY - startY);
+        render();
+        saveToFirebase();
+      }
+
+      function up() {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+      }
+
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    };
+
+    stage.appendChild(node);
+  }
+}
+
+addBtn.onclick = () => {
+  const type = document.getElementById("type").value;
+  const value = document.getElementById("value").value;
+
+  const id = Date.now().toString();
+  elements[id] = {
+    type,
+    value,
+    x: 10,
+    y: 10,
+    w: 300,
+    h: 200
+  };
+
+  saveToFirebase();
+  render();
 };
 
-clearBtn.onclick = () => {
-  set(overlayRef, "");
-};
+onValue(overlayRef, (snapshot) => {
+  elements = snapshot.val() || {};
+  render();
+});
 </script>
 
 </body>
